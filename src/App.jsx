@@ -74,7 +74,7 @@ function App() {
           console.log('[analyzeArtwork] Calling proxy:', PROXY_API_URL);
 
           const requestBody = {
-            model: 'google/gemma-3-27b-it:free',
+            model: 'google/gemma-3-12b-it:free',
             messages: [
               ...messages,
               {
@@ -168,7 +168,7 @@ I particularly appreciate how the warm colors of the flame contrast with the coo
         console.log('[handleSendMessage] Calling proxy:', PROXY_API_URL);
         
         const requestBody = {
-          model: 'anthropic/claude-3-haiku-20240307',
+          model: 'google/gemma-3-12b-it:free',
           messages: [...messages, userMessage]
         };
 
