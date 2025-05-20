@@ -7,6 +7,31 @@ import ArtworkDisplay from './components/ArtworkDisplay'
 // The new API endpoint for our Cloudflare Function proxy
 const PROXY_API_URL = '/openrouter-proxy';
 
+// Safe localStorage access
+const getPreferredTheme = () => {
+  try {
+    const storedTheme = localStorage.getItem('prodigy-prophet-theme');
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      return storedTheme === 'dark';
+    }
+    // Fall back to system preference
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch (err) {
+    // If localStorage is not accessible (e.g., in Cloudflare Pages Preview)
+    console.warn('Unable to access localStorage. Falling back to system preference.', err);
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+};
+
+// Safe localStorage save
+const saveThemePreference = (isDark) => {
+  try {
+    localStorage.setItem('prodigy-prophet-theme', isDark ? 'dark' : 'light');
+  } catch (err) {
+    console.warn('Unable to save theme preference to localStorage.', err);
+  }
+};
+
 function App() {
   const [artwork, setArtwork] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -14,12 +39,12 @@ function App() {
     { role: 'system', content: 'I am Prodigy Prophet, an AI art critic. I can analyze your artwork and provide detailed feedback on composition, technique, creativity, and overall quality.' }
   ])
   const [isWaiting, setIsWaiting] = useState(false)
-  const [darkMode, setDarkMode] = useState(window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const [darkMode, setDarkMode] = useState(getPreferredTheme)
   const timeoutRef = useRef(null)
 
-  // Apply dark/light mode to document
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+    saveThemePreference(darkMode)
   }, [darkMode])
 
   const toggleDarkMode = () => {
