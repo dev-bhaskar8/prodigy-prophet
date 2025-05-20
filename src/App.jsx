@@ -74,7 +74,7 @@ function App() {
           console.log('[analyzeArtwork] Calling proxy:', PROXY_API_URL);
 
           const requestBody = {
-            model: 'google/gemma-3-12b-it:free',
+            model: 'google/gemma-3-27b-it:free',
             messages: [
               ...messages,
               {
