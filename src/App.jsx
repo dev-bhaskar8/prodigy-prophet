@@ -4,6 +4,9 @@ import ImageUploader from './components/ImageUploader'
 import ChatInterface from './components/ChatInterface'
 import ArtworkDisplay from './components/ArtworkDisplay'
 
+// The new API endpoint for our Cloudflare Function proxy
+const PROXY_API_URL = '/openrouter-proxy';
+
 function App() {
   const [artwork, setArtwork] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -36,83 +39,59 @@ function App() {
   const analyzeArtwork = async (image) => {
     setIsAnalyzing(true)
     setIsWaiting(true)
-    
+    setMessages(prev => [...prev, { role: 'assistant', content: 'I\'m analyzing your artwork now...' }]);
+
     try {
       const imageBase64 = await convertImageToBase64(image)
       
-      // Add a message to show we're analyzing
-      const newMessage = {
-        role: 'assistant',
-        content: 'I\'m analyzing your artwork now...'
-      }
-      
-      setMessages(prevMessages => [...prevMessages, newMessage])
-      
-      // Wait for 3 seconds before making the API call - simulating analysis if API key isn't set
       timeoutRef.current = setTimeout(async () => {
         try {
-          const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
-          const apiUrl = import.meta.env.VITE_OPENROUTER_API_URL
+          console.log('[analyzeArtwork] Calling proxy:', PROXY_API_URL);
 
-          console.log('[analyzeArtwork] Attempting API call with:');
-          console.log('[analyzeArtwork] API Key (first 5 chars):', apiKey ? apiKey.substring(0, 5) : 'Not set');
-          console.log('[analyzeArtwork] API URL:', apiUrl);
-          
-          // Check if we have a valid API key, otherwise use a mock response
-          if (apiKey && apiKey !== 'your_openrouter_api_key' && apiUrl) {
-            // Real API call
-            const response = await fetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'HTTP-Referer': window.location.origin,
-                'X-Title': 'Prodigy Prophet'
-              },
-              body: JSON.stringify({
-                model: 'google/gemma-3-27b-it:free',
-                messages: [
-                  ...messages,
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'text', text: 'Please analyze this artwork and provide detailed feedback on composition, technique, creativity, and overall quality. Rate it on a scale of 1-10 and explain your reasoning.' },
-                      { type: 'image_url', image_url: { url: imageBase64 } }
-                    ]
-                  }
+          const requestBody = {
+            model: 'google/gemma-3-27b-it:free',
+            messages: [
+              ...messages,
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Please analyze this artwork and provide detailed feedback on composition, technique, creativity, and overall quality. Rate it on a scale of 1-10 and explain your reasoning.' },
+                  { type: 'image_url', image_url: { url: imageBase64 } }
                 ]
-              })
-            })
-            
-            if (!response.ok) { // Check for HTTP errors
-              const errorText = await response.text();
-              throw new Error(`HTTP error ${response.status}: ${errorText}`);
-            }
+              }
+            ]
+          };
 
-            const data = await response.json()
-            
-            if (data.choices && data.choices[0] && data.choices[0].message) {
-              setMessages(prevMessages => [
-                ...prevMessages.slice(0, -1), // Remove the "analyzing" message
-                { role: 'assistant', content: data.choices[0].message.content }
-              ])
-            } else {
-              throw new Error('Unexpected API response format')
-            }
-          } else {
-            // Mock response for demo purposes or when API key isn't set
-            console.log('[analyzeArtwork] Using mock analysis because API key is not properly set.');
-            const mockAnalysis = generateMockAnalysis()
-            setMessages(prevMessages => [
-              ...prevMessages.slice(0, -1), // Remove the "analyzing" message
-              { role: 'assistant', content: mockAnalysis }
+          const response = await fetch(PROXY_API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let detail = errorText;
+            try { detail = JSON.parse(errorText).error.message || errorText } catch (e) {}
+            throw new Error(`API error ${response.status}: ${detail}`);
+          }
+
+          const data = await response.json()
+          
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            setMessages(prev => [
+              ...prev.slice(0, -1),
+              { role: 'assistant', content: data.choices[0].message.content }
             ])
+          } else {
+            throw new Error('Unexpected API response format from proxy')
           }
         } catch (error) {
-          console.error('[analyzeArtwork] Error analyzing artwork:', error)
-          setMessages(prevMessages => [
-            ...prevMessages.slice(0, -1), // Remove the "analyzing" message
-            { role: 'assistant', content: `I encountered an error while analyzing your artwork: ${error.message}. This is likely because an OpenRouter API key hasn\'t been configured correctly. Please check your .env file and try again.` }
+          console.error('[analyzeArtwork] Error during analysis via proxy:', error)
+          setMessages(prev => [
+            ...prev.slice(0, -1),
+            { role: 'assistant', content: `Error analyzing artwork: ${error.message}. Please ensure the proxy is set up correctly and your OpenRouter key is configured in Cloudflare.` }
           ])
         } finally {
           setIsAnalyzing(false)
@@ -121,13 +100,10 @@ function App() {
       }, 3000)
       
     } catch (error) {
-      console.error('[analyzeArtwork] Error processing image:', error)
+      console.error('[analyzeArtwork] Error processing image for proxy:', error)
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error processing image. Try a different file.'}]);
       setIsAnalyzing(false)
       setIsWaiting(false)
-      setMessages(prevMessages => [
-        ...prevMessages,
-        { role: 'assistant', content: 'I encountered an error while processing your image. Please try uploading again with a smaller file or different format.' }
-      ])
     }
   }
   
@@ -156,7 +132,7 @@ I particularly appreciate how the warm colors of the flame contrast with the coo
     
     // Add user message to state
     const userMessage = { role: 'user', content: message }
-    setMessages(prevMessages => [...prevMessages, userMessage])
+    setMessages(prev => [...prev, userMessage])
     
     // Set waiting state with 3-second delay
     setIsWaiting(true)
@@ -164,56 +140,39 @@ I particularly appreciate how the warm colors of the flame contrast with the coo
     // Use timeout to enforce 3-second delay
     timeoutRef.current = setTimeout(async () => {
       try {
-        const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
-        const apiUrl = import.meta.env.VITE_OPENROUTER_API_URL
+        console.log('[handleSendMessage] Calling proxy:', PROXY_API_URL);
         
-        // Logic for API vs mock responses
-        if (apiKey && apiKey !== 'your_openrouter_api_key' && apiUrl) {
-          // Real API call
-          const apiMessages = artwork 
-            ? [...messages, userMessage] 
-            : [...messages, userMessage]
-          
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
-              'HTTP-Referer': window.location.origin,
-              'X-Title': 'Prodigy Prophet'
-            },
-            body: JSON.stringify({
-              model: 'anthropic/claude-3-haiku-20240307',
-              messages: apiMessages
-            })
-          })
+        const requestBody = {
+          model: 'anthropic/claude-3-haiku-20240307',
+          messages: [...messages, userMessage]
+        };
 
-          if (!response.ok) { // Check for HTTP errors
-            const errorText = await response.text();
-            throw new Error(`HTTP error ${response.status}: ${errorText}`);
-          }
-          
-          const data = await response.json()
-          
-          if (data.choices && data.choices[0] && data.choices[0].message) {
-            const assistantMessage = { role: 'assistant', content: data.choices[0].message.content }
-            setMessages(prevMessages => [...prevMessages, assistantMessage])
-          } else {
-            throw new Error('Unexpected API response format')
-          }
+        const response = await fetch(PROXY_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let detail = errorText;
+          try { detail = JSON.parse(errorText).error.message || errorText } catch (e) {}
+          throw new Error(`API error ${response.status}: ${detail}`);
+        }
+        
+        const data = await response.json()
+        
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          const assistantMessage = { role: 'assistant', content: data.choices[0].message.content }
+          setMessages(prev => [...prev, assistantMessage])
         } else {
-          // Mock response
-          console.log('[handleSendMessage] Using mock response because API key is not properly set.');
-          const mockResponse = "I can provide more insights about this artwork if you have specific questions. What aspects would you like me to elaborate on?"
-          const assistantMessage = { role: 'assistant', content: mockResponse }
-          setMessages(prevMessages => [...prevMessages, assistantMessage])
+          throw new Error('Unexpected API response format from proxy for chat')
         }
       } catch (error) {
-        console.error('[handleSendMessage] Error processing message:', error)
-        setMessages(prevMessages => [
-          ...prevMessages,
-          { role: 'assistant', content: `I encountered an error: ${error.message}. This is likely because the OpenRouter API key is not configured properly. For a full experience, please set up your API key.` }
-        ])
+        console.error('[handleSendMessage] Error processing message via proxy:', error)
+        setMessages(prev => [...prev, { role: 'assistant', content: `Error processing message: ${error.message}. Check proxy setup.` }])
       } finally {
         setIsWaiting(false)
       }
