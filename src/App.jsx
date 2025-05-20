@@ -53,6 +53,10 @@ function App() {
         try {
           const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
           const apiUrl = import.meta.env.VITE_OPENROUTER_API_URL
+
+          console.log('[analyzeArtwork] Attempting API call with:');
+          console.log('[analyzeArtwork] API Key (first 5 chars):', apiKey ? apiKey.substring(0, 5) : 'Not set');
+          console.log('[analyzeArtwork] API URL:', apiUrl);
           
           // Check if we have a valid API key, otherwise use a mock response
           if (apiKey && apiKey !== 'your_openrouter_api_key' && apiUrl) {
@@ -80,6 +84,11 @@ function App() {
               })
             })
             
+            if (!response.ok) { // Check for HTTP errors
+              const errorText = await response.text();
+              throw new Error(`HTTP error ${response.status}: ${errorText}`);
+            }
+
             const data = await response.json()
             
             if (data.choices && data.choices[0] && data.choices[0].message) {
@@ -92,6 +101,7 @@ function App() {
             }
           } else {
             // Mock response for demo purposes or when API key isn't set
+            console.log('[analyzeArtwork] Using mock analysis because API key is not properly set.');
             const mockAnalysis = generateMockAnalysis()
             setMessages(prevMessages => [
               ...prevMessages.slice(0, -1), // Remove the "analyzing" message
@@ -99,10 +109,10 @@ function App() {
             ])
           }
         } catch (error) {
-          console.error('Error analyzing artwork:', error)
+          console.error('[analyzeArtwork] Error analyzing artwork:', error)
           setMessages(prevMessages => [
             ...prevMessages.slice(0, -1), // Remove the "analyzing" message
-            { role: 'assistant', content: 'I encountered an error while analyzing your artwork. This is likely because an OpenRouter API key hasn\'t been configured. Please check your .env file and try again.' }
+            { role: 'assistant', content: `I encountered an error while analyzing your artwork: ${error.message}. This is likely because an OpenRouter API key hasn\'t been configured correctly. Please check your .env file and try again.` }
           ])
         } finally {
           setIsAnalyzing(false)
@@ -111,7 +121,7 @@ function App() {
       }, 3000)
       
     } catch (error) {
-      console.error('Error processing image:', error)
+      console.error('[analyzeArtwork] Error processing image:', error)
       setIsAnalyzing(false)
       setIsWaiting(false)
       setMessages(prevMessages => [
@@ -177,6 +187,11 @@ I particularly appreciate how the warm colors of the flame contrast with the coo
               messages: apiMessages
             })
           })
+
+          if (!response.ok) { // Check for HTTP errors
+            const errorText = await response.text();
+            throw new Error(`HTTP error ${response.status}: ${errorText}`);
+          }
           
           const data = await response.json()
           
@@ -188,15 +203,16 @@ I particularly appreciate how the warm colors of the flame contrast with the coo
           }
         } else {
           // Mock response
+          console.log('[handleSendMessage] Using mock response because API key is not properly set.');
           const mockResponse = "I can provide more insights about this artwork if you have specific questions. What aspects would you like me to elaborate on?"
           const assistantMessage = { role: 'assistant', content: mockResponse }
           setMessages(prevMessages => [...prevMessages, assistantMessage])
         }
       } catch (error) {
-        console.error('Error processing message:', error)
+        console.error('[handleSendMessage] Error processing message:', error)
         setMessages(prevMessages => [
           ...prevMessages,
-          { role: 'assistant', content: 'I encountered an error. This is likely because the OpenRouter API key is not configured properly. For a full experience, please set up your API key.' }
+          { role: 'assistant', content: `I encountered an error: ${error.message}. This is likely because the OpenRouter API key is not configured properly. For a full experience, please set up your API key.` }
         ])
       } finally {
         setIsWaiting(false)
