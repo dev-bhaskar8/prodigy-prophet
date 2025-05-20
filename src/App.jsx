@@ -70,7 +70,7 @@ function App() {
                 'X-Title': 'Prodigy Prophet'
               },
               body: JSON.stringify({
-                model: 'anthropic/claude-3-opus-20240229',
+                model: 'google/gemma-3-27b-it:free',
                 messages: [
                   ...messages,
                   {
